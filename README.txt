@@ -1,21 +1,17 @@
-나라장터 통합조회 V10 (간편 안정화)
+나라장터 사업자 개업일 및 인증기업 대조 V11
 
-1. Cloudflare dashboard > Workers & Pages > g2b > Edit code
-2. cloudflare-worker.js 파일 내용 전체 복사 후 기존 내용을 전체 교체
-3. Deploy (저장만 하지 말고 배포)
-4. 기존 workers.dev 주소 새로고침, 제목 V10 확인
-5. 서버 연결 점검 > 1건 조회 > 전체 자동조회
+[설치]
+1. Cloudflare 대시보드에서 Workers & Pages > g2b > Edit code로 들어갑니다.
+2. cloudflare-worker.js 내용 전체를 붙여넣고 Deploy 합니다.
+3. Settings > Variables and secrets > Add variable을 선택합니다.
+4. Type: Secret / Name: G2B_API_KEY / Value: 공공데이터포털 디코딩(Decoding) 인증키
+5. Save 후 Production 배포에 적용됐는지 확인합니다. 필요 시 재배포합니다.
+6. https://g2b.junewoopark16.workers.dev/api/health 에서 version=V11, keyConfigured=true를 확인합니다.
+7. 웹페이지를 새로고침(CTRL+F5)하고 1건 연결 시험 후 전체 조회합니다.
 
-404 개선: 별도 /api/lookup, /api/health 요청을 제거, 모든 백엔드 조회를 POST / 단일 경로로 처리합니다. 배포가 오래된 코드면 여전히 404 가능하므로 V10 표시 확인 필수.
-
-인증키: 공공데이터포털 디코딩 키를 한 번만 입력합니다. 동일 키 문자열을 여러 서비스에서 사용하더라도 각 API 활용신청/승인 여부는 별개입니다.
-
-개업일: 조달청 공식 getPrcrmntCorpBasicInfo02 의 ServiceKey, inqryDiv=3, bizno, numOfRows, pageNo, type=json 사용.
-여성기업, 장애인기업: 정확한 공식 호출 경로/응답 명세가 검증되지 않았으므로 자동조회는 구현하지 않았습니다. 인증자료 TXT/CSV 업로드를 통해 사업자등록번호 및 유효기간을 대조합니다.
-사회적기업: 한국사회적기업진흥원 공식 인증 현황을 사업자등록번호 및 유효기간을 포함하는 TXT/CSV로 준비 후 업로드해야 합니다.
-미확인은 미인증을 의미하지 않습니다. 정확한 인증 기업 여부는 원본 확인서 확인 필요.
-
-인증자료 업로드 헤더: 사업자등록번호,구분,인증상태,유효시작일,유효종료일
-기존 조회 445개 목록 및 결과 브라우저 저장소 유지. 이전 개업일 조회 TXT 복원 지원.
-
-인증키를 다른 사람과 공유하지 마세요. Worker의 응답 진단에는 키를 출력하지 않습니다.
+[주의]
+- Secret은 Worker 서버에서만 읽으며 HTML/클라이언트 요청에 포함되지 않습니다.
+- 같은 인증키 문자열을 쓰더라도 각 API별 활용승인이 별도로 필요할 수 있습니다.
+- V11은 개업일 API 자동조회와 여성/장애인/사회적기업 공식 CSV/TXT 대조를 제공합니다. 3개 인증정보의 실시간 API 자동조회는 미구현입니다.
+- 사이트가 공개 상태이면 다른 방문자도 API 조회를 호출할 수 있으므로 Cloudflare Access 등 접근제한을 권장합니다.
+- 기존 브라우저 정상 조회결과는 그대로 유지합니다.
