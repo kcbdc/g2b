@@ -1,6 +1,6 @@
 {
   "name": "g2b",
   "main": "./worker.js",
-  "compatibility_date": "2026-10-03",
+  "compatibility_date": "2026-11-03",
   "workers_dev": true
 }

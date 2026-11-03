@@ -1,9 +1,10 @@
-나라장터 통합조회 V17 — 정상 접속 V8 경로 복원
+나라장터 통합조회 V19 — SMPP 매칭자료 없음 처리
 
-배포: Cloudflare Workers & Pages > g2b > Edit code에서 cloudflare-worker.js 전체 내용만 붙여넣고 Deploy (index.html 별도 배포 불필요).
-Secret: Settings > Variables and secrets > G2B_API_KEY (Secret).
-확인: https://g2b.junewoopark16.workers.dev/api/health 에서 JSON version V17 확인.
-반드시 Worker 코드 전체를 붙여넣어야 합니다. index.html만 올리면 웹페이지는 보이지만 API는 작동하지 않습니다.
-사용: 1건 통합시험 -> 전체 통합조회. 사회적기업은 첨부 명단 2026-11-02 기준 자동 표시.
-여성/장애인 인증은 별도 SMPP API 활용승인이 필요하며, 인증서 유효기간을 기준으로 Y/N 판단. 오류는 미확인 표시.
-실제 실서비스 인증키 조회는 이 실행 환경에서는 검증할 수 없으며 로컬 모의 API 응답으로 테스트합니다.
+1. worker.js 와 wrangler.jsonc 를 GitHub kcbdc/g2b 최상위에 올립니다.
+2. GitHub에 예전 index.html 또는 assets 정적배포가 있으면 제거합니다.
+3. Cloudflare에서 Secret G2B_API_KEY를 유지하고 최신 배포를 활성화합니다.
+4. /api/health 에서 V19를 확인합니다.
+5. 1건 통합시험으로 SMPP 90 메시지가 N으로 처리되는지 확인합니다.
+6. 여성/장애인 인증이 실제 있는 사업자번호의 Y 응답도 확인한 후 전체조회합니다.
+
+정책: SMPP 코드 90 및 '매칭데이터가 존재하지 않습니다'의 동시 반환은 해당 기준일 조회 자료 없음(잠정 N)으로 처리합니다. 이는 첨부된 공식 기술문서의 오류코드 표에 없는 코드이므로 인증서 부존재의 법적 확정이 아닙니다. 서비스 이용승인/키/트래픽 오류는 N으로 처리하지 않습니다. 사회적기업 명단은 2026-11-02 기준입니다.
