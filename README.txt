@@ -1,15 +1,9 @@
-나라장터 통합조회 V22 - 기업구분 3 제외 중소기업 분류
+나라장터 통합조회 V23 · Excel CSV 다운로드
 
-적용 원본: 2026-3차_최종.xlsx / 전체 시트
-445개 사업자등록번호와 첨부 자료 전체 시트 대조:
- 기업구분 3 = 24개 → N
- 기업구분 1 = 65개 → Y
- 명단에 없는 번호 = 356개 → 사용자 요청에 따라 Y (중소기업확인서 미검증)
- 결과 Y 421, N 24
+1. GitHub kcbdc/g2b의 worker.js를 본 파일로 교체 후 main 브랜치에 반영합니다.
+2. wrangler.jsonc는 기존 것을 유지합니다. index.html은 다시 배포하지 마십시오.
+3. /api/health에서 V23 확인 후 사용합니다.
+4. 조회 결과 > 통합 결과 CSV로 내려받습니다.
 
-중요: 기업구분 코드에 대한 사용자 분류 규칙이며 확인서 발급/유효성의 공식 판정은 아닙니다.
-
-배포: GitHub kcbdc/g2b main 저장소에서 worker.js 교체, wrangler.jsonc 유지/교체, 구형 index.html 삭제. Cloudflare Deployments에서 새 버전 활성화 확인. 기존 Secret G2B_API_KEY 유지.
-기존 조회 100건, 429 중단 후 이어 조회 및 진행기록 JSON 백업 기능 유지.
-
-배포 후 /api/health에서 version V22 확인. 개발 모의검사 결과와 Production 실제 API 결과는 구분하세요.
+CSV: UTF-8 BOM, sep=, 안내행, 쉼표 분리, RFC 방식 큰따옴표 이스케이프, CRLF 줄바꿈. 사업자번호는 Excel에서 텍스트로 유지되도록 유효한 10자리 숫자만 ="번호"로 출력합니다.
+기존 조회결과 로컬 저장소와 JSON 백업/복원 로직은 변경하지 않았습니다.
