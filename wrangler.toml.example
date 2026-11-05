@@ -1,0 +1,5 @@
+# 기존 wrangler.toml 에 D1 바인딩만 추가하세요 (대시보드 배포라면 Settings → Bindings → D1 에서 이름을 DB 로 연결)
+[[d1_databases]]
+binding = "DB"
+database_name = "g2b-db"
+database_id = "여기에-wrangler-d1-create-결과의-id"

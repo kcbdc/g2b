@@ -1,0 +1,179 @@
+<!-- ===== 업체 명단 엑셀 업로드 → D1 저장 (기존 페이지의 "2. 조회 대상" 카드 위/아래 아무 곳에 붙여넣기) ===== -->
+<section id="dbUploadCard" class="dbu-card">
+  <h2 class="dbu-title">업체 명단 업로드 <span class="dbu-sub">엑셀 → 사업자번호·업체명 추출 → DB 저장</span></h2>
+  <div class="dbu-note">
+    계약관리대장 엑셀(.xlsx)을 올리면 <b>계약업체</b>·<b>업체사업자번호</b> 열을 자동으로 찾아 추출하고,
+    같은 사업자번호는 <b>한 건만</b> 남겨 Cloudflare D1에 저장합니다. 이미 저장된 업체는 업체명만 갱신됩니다.
+  </div>
+
+  <div class="dbu-row">
+    <input id="dbuKey" type="password" placeholder="업로드 키 (UPLOAD_KEY)" autocomplete="off">
+    <input id="dbuFile" type="file" accept=".xlsx,.xls">
+  </div>
+
+  <div id="dbuSummary" class="dbu-summary" hidden></div>
+  <div id="dbuTableWrap" class="dbu-tablewrap" hidden>
+    <table class="dbu-table">
+      <thead><tr><th style="width:56px">No.</th><th style="width:140px">사업자등록번호</th><th>업체명</th></tr></thead>
+      <tbody id="dbuBody"></tbody>
+    </table>
+  </div>
+
+  <div class="dbu-row">
+    <button id="dbuSave" class="dbu-btn dbu-primary" disabled>DB에 저장</button>
+    <button id="dbuLoad" class="dbu-btn">저장된 명단 보기</button>
+    <input id="dbuQ" type="text" placeholder="저장된 명단 검색 (사업자번호 또는 업체명)">
+    <span id="dbuMsg" class="dbu-msg"></span>
+  </div>
+  <div id="dbuDbWrap" class="dbu-tablewrap" hidden>
+    <table class="dbu-table">
+      <thead><tr><th style="width:56px">No.</th><th style="width:140px">사업자등록번호</th><th>업체명</th><th style="width:150px">최종 갱신</th></tr></thead>
+      <tbody id="dbuDbBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  .dbu-card{background:#fff;border:1px solid #e3e8f0;border-radius:12px;padding:20px 24px;margin:16px 0;font-size:12px;color:#1c2a44}
+  .dbu-title{font-size:14px;margin:0 0 12px;color:#0f2d5c}
+  .dbu-sub{font-weight:400;font-size:11px;color:#6b7a90;margin-left:8px}
+  .dbu-note{background:#eaf1fd;border-radius:8px;padding:10px 14px;line-height:1.6;color:#33507d;margin-bottom:12px}
+  .dbu-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .dbu-row input[type=password],.dbu-row input[type=text]{border:1px solid #cfd8e6;border-radius:8px;padding:8px 10px;font-size:12px;min-width:200px}
+  #dbuQ{flex:1;min-width:220px}
+  .dbu-btn{border:0;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;background:#e8eef9;color:#0f2d5c;cursor:pointer}
+  .dbu-primary{background:#1a63d0;color:#fff}
+  .dbu-btn:disabled{opacity:.45;cursor:not-allowed}
+  .dbu-summary{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+  .dbu-chip{background:#f4f7fc;border:1px solid #e3e8f0;border-radius:8px;padding:8px 12px}
+  .dbu-chip b{display:block;font-size:16px;color:#0f2d5c;margin-top:2px}
+  .dbu-chip.warn b{color:#b45309}
+  .dbu-tablewrap{max-height:260px;overflow:auto;border:1px solid #e3e8f0;border-radius:8px;margin:8px 0}
+  .dbu-table{width:100%;border-collapse:collapse}
+  .dbu-table th{position:sticky;top:0;background:#eaf1fd;text-align:left;padding:8px 10px}
+  .dbu-table td{padding:7px 10px;border-top:1px solid #eef2f8}
+  .dbu-msg{font-weight:600}
+  .dbu-msg.ok{color:#047857}.dbu-msg.err{color:#b91c1c}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ---------- 순수 함수: 엑셀 행렬 → 중복 제거된 업체 목록 ----------
+/*DBU-PURE-START*/
+function dbuFindHeader(aoa) {
+  var NAME = ['계약업체', '업체명', '상호', '상호명', '거래처명'];
+  var BIZ = ['업체사업자번호', '사업자등록번호', '사업자번호'];
+  var DATE = ['계약일자', '계약일'];
+  for (var i = 0; i < Math.min(aoa.length, 60); i++) {
+    var row = (aoa[i] || []).map(function (c) { return String(c == null ? '' : c).replace(/\s/g, ''); });
+    var n = row.findIndex(function (c) { return NAME.indexOf(c) > -1; });
+    var b = row.findIndex(function (c) { return BIZ.indexOf(c) > -1; });
+    if (n > -1 && b > -1) return { row: i, n: n, b: b, d: row.findIndex(function (c) { return DATE.indexOf(c) > -1; }) };
+  }
+  return null;
+}
+function dbuExtract(aoa) {
+  var h = dbuFindHeader(aoa);
+  if (!h) return { error: '"계약업체"와 "업체사업자번호" 열을 찾지 못했습니다. 양식을 확인해 주세요.' };
+  var map = new Map();
+  var st = { total: 0, invalid: 0, duplicate: 0, nameConflict: 0 };
+  for (var i = h.row + 1; i < aoa.length; i++) {
+    var r = aoa[i] || [];
+    var rawB = r[h.b], rawN = r[h.n];
+    if ((rawB == null || String(rawB).trim() === '') && (rawN == null || String(rawN).trim() === '')) continue;
+    st.total++;
+    var biz = String(rawB == null ? '' : rawB).replace(/\D/g, '');
+    var name = String(rawN == null ? '' : rawN).replace(/\s+/g, ' ').trim();
+    if (biz.length !== 10 || !name) { st.invalid++; continue; }
+    var date = h.d > -1 ? String(r[h.d] || '').replace(/\D/g, '') : '';
+    var cur = map.get(biz);
+    if (!cur) { map.set(biz, { bizNo: biz, name: name, date: date, conflict: false }); continue; }
+    st.duplicate++;
+    if (cur.name !== name) {
+      if (!cur.conflict) { cur.conflict = true; st.nameConflict++; }
+      if (date && date > cur.date) { cur.name = name; cur.date = date; } // 같은 번호에 업체명이 다르면 최신 계약일자의 이름 사용
+    }
+  }
+  return { rows: Array.from(map.values()).map(function (x) { return { bizNo: x.bizNo, name: x.name }; }), stats: st };
+}
+/*DBU-PURE-END*/
+
+// ---------- 화면 동작 ----------
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var parsed = null, fileName = '';
+  var fmt = function (d) { return d.replace(/(\d{3})(\d{2})(\d{5})/, '$1-$2-$3'); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var msg = function (t, cls) { var m = $('dbuMsg'); m.textContent = t || ''; m.className = 'dbu-msg ' + (cls || ''); };
+  var key = function () { return $('dbuKey').value.trim(); };
+  try { $('dbuKey').value = sessionStorage.getItem('dbuKey') || ''; } catch (e) {}
+
+  function chip(label, val, warn) { return '<div class="dbu-chip' + (warn ? ' warn' : '') + '">' + label + '<b>' + val + '</b></div>'; }
+
+  $('dbuFile').addEventListener('change', async function (ev) {
+    var f = ev.target.files[0];
+    parsed = null; $('dbuSave').disabled = true; msg('');
+    $('dbuSummary').hidden = true; $('dbuTableWrap').hidden = true;
+    if (!f) return;
+    if (typeof XLSX === 'undefined') return msg('엑셀 라이브러리를 불러오지 못했습니다. 네트워크를 확인해 주세요.', 'err');
+    try {
+      var wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      var res = null;
+      for (var s = 0; s < wb.SheetNames.length && !(res && res.rows); s++) { // 모든 시트 중 양식에 맞는 첫 시트 사용
+        var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[s]], { header: 1, raw: false, defval: '' });
+        res = dbuExtract(aoa);
+      }
+      if (res.error) return msg(res.error, 'err');
+      parsed = res.rows; fileName = f.name;
+      var st = res.stats;
+      $('dbuSummary').innerHTML =
+        chip('엑셀 데이터 행', st.total.toLocaleString()) +
+        chip('중복 제거 후 업체', res.rows.length.toLocaleString()) +
+        chip('제거된 중복 행', st.duplicate.toLocaleString()) +
+        chip('번호 오류·누락 제외', st.invalid.toLocaleString(), st.invalid > 0) +
+        chip('같은 번호·다른 업체명', st.nameConflict.toLocaleString(), st.nameConflict > 0);
+      $('dbuSummary').hidden = false;
+      $('dbuBody').innerHTML = res.rows.map(function (r, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + fmt(r.bizNo) + '</td><td>' + esc(r.name) + '</td></tr>';
+      }).join('');
+      $('dbuTableWrap').hidden = false;
+      $('dbuSave').disabled = res.rows.length === 0;
+    } catch (e) { msg('엑셀을 읽는 중 오류: ' + e.message, 'err'); }
+  });
+
+  async function api(path, opts) {
+    var r = await fetch(path, Object.assign({ headers: { 'x-upload-key': key(), 'content-type': 'application/json' } }, opts));
+    var j = await r.json().catch(function () { return { ok: false, error: '서버 응답을 해석하지 못했습니다.' }; });
+    if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+
+  $('dbuSave').addEventListener('click', async function () {
+    if (!parsed || !parsed.length) return;
+    if (!key()) return msg('업로드 키를 입력해 주세요.', 'err');
+    try { sessionStorage.setItem('dbuKey', key()); } catch (e) {}
+    $('dbuSave').disabled = true; msg('저장 중...');
+    try {
+      var j = await api('/api/companies/upload', { method: 'POST', body: JSON.stringify({ fileName: fileName, rows: parsed }) });
+      msg('저장 완료: 신규 ' + j.inserted + '개, 기존 갱신 ' + j.updated + '개 (DB 총 ' + j.total.toLocaleString() + '개사)', 'ok');
+      loadDb();
+    } catch (e) { msg('저장 실패: ' + e.message, 'err'); }
+    $('dbuSave').disabled = false;
+  });
+
+  async function loadDb() {
+    if (!key()) return msg('업로드 키를 입력해 주세요.', 'err');
+    try { sessionStorage.setItem('dbuKey', key()); } catch (e) {}
+    try {
+      var j = await api('/api/companies?limit=1000&q=' + encodeURIComponent($('dbuQ').value));
+      $('dbuDbBody').innerHTML = j.rows.map(function (r, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + fmt(r.bizNo) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.updatedAt) + '</td></tr>';
+      }).join('');
+      $('dbuDbWrap').hidden = false;
+      if (!$('dbuMsg').textContent.startsWith('저장 완료')) msg('저장된 업체 ' + j.total.toLocaleString() + '개사 중 ' + j.matched.toLocaleString() + '개사 조회' + (j.matched > j.rows.length ? ' (상위 ' + j.rows.length + '개 표시)' : ''), 'ok');
+    } catch (e) { msg('조회 실패: ' + e.message, 'err'); }
+  }
+  $('dbuLoad').addEventListener('click', loadDb);
+  $('dbuQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') loadDb(); });
+})();
+</script>
